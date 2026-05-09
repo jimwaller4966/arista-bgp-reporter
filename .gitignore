@@ -1,0 +1,16 @@
+﻿# Device lists - never commit real hostnames/IPs
+devices.txt
+
+# Collected CLI output
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
