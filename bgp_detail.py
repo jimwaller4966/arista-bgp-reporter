@@ -1,69 +1,76 @@
 """
 parsers/bgp_detail.py — Parser for Arista 'show ip bgp detail vrf all' output.
 
-Handles both:
-  - 'show ip bgp detail vrf all'  (VRF headers embedded in output)
-  - 'show ip bgp detail'          (default VRF only, no VRF headers)
+Each record represents one BGP path for a prefix, not a neighbor session.
 
-VRF context is tracked as the parser walks through the output so each
-neighbor record carries the correct VRF name.
-
-To add a new parser:
-  1. Create parsers/<name>.py with parse(host, raw_text) -> list[dict]
-  2. Define COLUMNS, TITLE, COMMAND at module level
-  3. Create a matching parse_<name>.py renderer (clone parse_bgp.py)
+Fields per record:
+    host, vrf, prefix, paths_available,
+    as_path, next_hop, peer_ip, peer_rid,
+    origin, local_pref, weight, metric,
+    age, valid, best, local, redistributed,
+    communities
 """
-
 import re
 
+TITLE        = "BGP Route Detail"
+COMMAND      = "show ip bgp detail vrf all"
+COMMAND_SLUGS = [
+    "show_ip_bgp_detail_vrf_all",
+    "show_ip_bgp_detail",
+]
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+COLUMNS = [
+    {"key": "host",            "label": "Device"},
+    {"key": "vrf",             "label": "VRF"},
+    {"key": "prefix",          "label": "Prefix"},
+    {"key": "paths_available", "label": "Paths"},
+    {"key": "as_path",         "label": "AS Path"},
+    {"key": "next_hop",        "label": "Next Hop"},
+    {"key": "peer_ip",         "label": "Peer IP"},
+    {"key": "origin",          "label": "Origin"},
+    {"key": "local_pref",      "label": "Local Pref"},
+    {"key": "weight",          "label": "Weight"},
+    {"key": "metric",          "label": "Metric"},
+    {"key": "age",             "label": "Age"},
+    {"key": "best",            "label": "Best"},
+    {"key": "valid",           "label": "Valid"},
+    {"key": "local",           "label": "Local"},
+    {"key": "communities",     "label": "Communities"},
+]
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def _extract(pattern, text, group=1, default="—"):
     m = re.search(pattern, text)
     return m.group(group).strip() if m else default
 
+def _flag(pattern, text):
+    return bool(re.search(pattern, text))
 
-def _int(val, default=0):
-    try:
-        return int(str(val).replace(",", ""))
-    except (ValueError, AttributeError):
-        return default
-
-
-# ── VRF-aware splitter ────────────────────────────────────────────────────────
-
+# ── VRF block splitter ────────────────────────────────────────────────────────
 def _split_vrf_blocks(raw_text):
     """
     Split raw output into (vrf_name, block_text) tuples.
-
-    Handles two formats:
-
-    Format A — 'show ip bgp detail vrf all' (EOS inserts VRF header lines):
-        VRF: default
-           BGP neighbor is 10.0.0.1 ...
-           ...
-        VRF: MGMT
-           BGP neighbor is 192.168.1.1 ...
-
-    Format B — 'show ip bgp detail' (no VRF headers, implicit default):
-        BGP neighbor is 10.0.0.1 ...
+    Handles:
+      Format A — 'show ip bgp detail vrf all':
+        BGP routing table information for VRF default
+          BGP routing table entry for 10.0.0.1/32
+          ...
+      Format B — 'show ip bgp detail' (default VRF only, no VRF header):
+        BGP routing table entry for 10.0.0.1/32
         ...
-
-    Returns list of (vrf, neighbor_block_text).
     """
     results = []
-
-    # Check if output contains VRF section headers
-    vrf_header_re = re.compile(r"^VRF:\s+(\S+)", re.MULTILINE)
+    vrf_header_re = re.compile(
+        r"^BGP routing table information for VRF (\S+)", re.MULTILINE
+    )
     vrf_matches = list(vrf_header_re.finditer(raw_text))
 
     if not vrf_matches:
-        # Format B — no VRF headers, treat everything as default VRF
-        neighbor_blocks = re.split(r"(?=^BGP neighbor is )", raw_text, flags=re.MULTILINE)
-        for block in neighbor_blocks:
+        # Format B — no VRF headers, treat as default
+        prefix_blocks = re.split(r"(?=^BGP routing table entry for )", raw_text, flags=re.MULTILINE)
+        for block in prefix_blocks:
             block = block.strip()
-            if block.startswith("BGP neighbor is "):
+            if block.startswith("BGP routing table entry for "):
                 results.append(("default", block))
         return results
 
@@ -73,138 +80,109 @@ def _split_vrf_blocks(raw_text):
         section_start = match.end()
         section_end = vrf_matches[i + 1].start() if i + 1 < len(vrf_matches) else len(raw_text)
         section_text = raw_text[section_start:section_end]
-
-        neighbor_blocks = re.split(r"(?=^BGP neighbor is )", section_text, flags=re.MULTILINE)
-        for block in neighbor_blocks:
+        prefix_blocks = re.split(r"(?=^BGP routing table entry for )", section_text, flags=re.MULTILINE)
+        for block in prefix_blocks:
             block = block.strip()
-            if block.startswith("BGP neighbor is "):
+            if block.startswith("BGP routing table entry for "):
                 results.append((vrf_name, block))
 
     return results
 
+# ── Path splitter within a prefix block ───────────────────────────────────────
+def _split_paths(block):
+    """
+    Given a prefix block, return a list of individual path strings.
+    Paths start with a line that is either:
+      - An AS path like "  65002" or "  65003 65002"
+      - "  Local" for locally originated routes
+    """
+    # Split on lines that look like the start of a path:
+    # 2 spaces + (digits/spaces forming AS path, or "Local")
+    path_re = re.compile(r"(?=^  (?:Local|\d[\d ]*)\n)", re.MULTILINE)
+    paths = path_re.split(block)
+    return [p.strip() for p in paths if p.strip() and not p.strip().startswith("BGP routing table")]
 
-# ── Per-neighbor block parser ─────────────────────────────────────────────────
+# ── Per-path parser ───────────────────────────────────────────────────────────
+def _parse_path(host, vrf, prefix, paths_available, path_text):
+    """Parse a single path block into a record dict."""
+    lines = path_text.splitlines()
 
-def _parse_neighbor_block(host, vrf, block):
-    neighbor = _extract(r"^BGP neighbor is (\S+)", block)
-    remote_as = _extract(r"remote AS (\d+)", block)
-    local_as = _extract(r"local AS (\d+)", block)
-    description = _extract(r"Description: (.+)", block)
+    # First line is the AS path (or "Local")
+    as_path = lines[0].strip() if lines else "—"
 
-    # State
-    state = _extract(r"BGP state is (\w+)", block)
+    # Next-hop line: "    10.1.12.2 from 10.1.12.2 (10.0.0.2)"
+    # or for local:  "    - from - (10.0.0.1)"
+    nexthop_line = lines[1].strip() if len(lines) > 1 else ""
+    next_hop = _extract(r"^(\S+)\s+from", nexthop_line, default="—")
+    peer_ip  = _extract(r"from\s+(\S+)", nexthop_line, default="—")
 
-    # Uptime — present when Established
-    uptime = _extract(r"up for (.+?)(?:,|\n)", block)
+    # Attributes line: "Origin IGP, metric 0, localpref 100, ..."
+    attr_line = " ".join(lines[2:]) if len(lines) > 2 else ""
 
-    # Address families active on this session
-    afs = re.findall(r"Address family (\S+ \S+) is", block)
-    address_families = ", ".join(afs) if afs else "—"
+    origin     = _extract(r"Origin\s+(\S+)",          attr_line, default="—")
+    metric     = _extract(r"metric\s+(\S+),",          attr_line, default="—")
+    local_pref = _extract(r"localpref\s+(\S+),",       attr_line, default="—")
+    weight     = _extract(r"weight\s+(\d+)",            attr_line, default="0")
 
-    # Prefix counts
-    prefixes_received = _int(_extract(r"(\d[\d,]*) accepted prefixes", block))
-    prefixes_advertised = _int(_extract(r"(\d[\d,]*) advertised prefixes", block))
+    # Age / flags line: "Received 00:01:23 ago, valid, external, best"
+    age  = _extract(r"Received\s+(\S+)\s+ago",         attr_line, default="—")
+    best  = _flag(r"\bbest\b",                          attr_line)
+    valid = _flag(r"\bvalid\b",                         attr_line)
+    local = _flag(r"\blocal\b",                         attr_line)
+    redistributed = _flag(r"\bredistributed\b",         attr_line)
 
-    # Message counters
-    msgs_in = _int(_extract(r"(\d[\d,]*) messages? received", block))
-    msgs_out = _int(_extract(r"(\d[\d,]*) messages? sent", block))
-
-    # Hold / keepalive
-    hold_time = _extract(r"Hold time is (\d+)", block)
-    keepalive = _extract(r"Configured hold time is \d+, keepalive interval is (\d+)", block)
-
-    # Neighbor router-ID
-    router_id = _extract(r"Neighbor(?:'s)? BGP router.id (?:is )?(\d+\.\d+\.\d+\.\d+)", block)
-
-    # Session resets and notifications
-    resets = _int(_extract(r"(\d+) times? connection reset", block))
-    notifications_in = _int(_extract(r"(\d[\d,]*) notifications? received", block))
-    notifications_out = _int(_extract(r"(\d[\d,]*) notifications? sent", block))
+    # Communities — may appear 0 or more times across the path text
+    # EOS format: "Community: 65001:10 65001:12200"
+    community_matches = re.findall(r"Community:\s+(.+)", path_text)
+    if community_matches:
+        # Flatten all communities, deduplicate preserving order
+        all_comms = []
+        seen = set()
+        for cm in community_matches:
+            for c in cm.strip().split():
+                if c not in seen:
+                    seen.add(c)
+                    all_comms.append(c)
+        communities = " ".join(all_comms)
+    else:
+        communities = ""
 
     return {
-        "host":                 host,
-        "vrf":                  vrf,
-        "neighbor":             neighbor,
-        "description":          description,
-        "remote_as":            remote_as,
-        "local_as":             local_as,
-        "state":                state,
-        "uptime":               uptime,
-        "address_families":     address_families,
-        "prefixes_received":    prefixes_received,
-        "prefixes_advertised":  prefixes_advertised,
-        "msgs_in":              msgs_in,
-        "msgs_out":             msgs_out,
-        "hold_time":            hold_time,
-        "keepalive":            keepalive,
-        "router_id":            router_id,
-        "resets":               resets,
-        "notifications_in":     notifications_in,
-        "notifications_out":    notifications_out,
+        "host":            host,
+        "vrf":             vrf,
+        "prefix":          prefix,
+        "paths_available": paths_available,
+        "as_path":         as_path,
+        "next_hop":        next_hop,
+        "peer_ip":         peer_ip,
+        "origin":          origin,
+        "local_pref":      local_pref,
+        "weight":          weight,
+        "metric":          metric,
+        "age":             age,
+        "best":            "✓" if best else "",
+        "valid":           "✓" if valid else "",
+        "local":           "✓" if local else "",
+        "redistributed":   "✓" if redistributed else "",
+        "communities":     communities,
     }
 
-
 # ── Main entry point ──────────────────────────────────────────────────────────
-
 def parse(host, raw_text):
     """
-    Parse 'show ip bgp [vrf all] detail' output for one device.
-
-    Args:
-        host (str): Device hostname or IP
-        raw_text (str): Raw CLI output (vrf all or default-only)
-
-    Returns:
-        list[dict]: One dict per BGP neighbor, each with a 'vrf' field
+    Parse raw 'show ip bgp detail vrf all' output.
+    Returns list of dicts, one per BGP path.
     """
-    neighbors = []
-    blocks = _split_vrf_blocks(raw_text)
+    records = []
+    vrf_blocks = _split_vrf_blocks(raw_text)
 
-    for vrf, block in blocks:
-        try:
-            n = _parse_neighbor_block(host, vrf, block)
-            neighbors.append(n)
-        except Exception as e:
-            neighbors.append({
-                "host":     host,
-                "vrf":      vrf,
-                "neighbor": "parse error",
-                "state":    "error",
-                "_error":   str(e),
-            })
+    for vrf, prefix_block in vrf_blocks:
+        prefix = _extract(r"^BGP routing table entry for (\S+)", prefix_block)
+        paths_available = _extract(r"Paths:\s+(\d+)\s+available", prefix_block, default="1")
 
-    return neighbors
+        path_texts = _split_paths(prefix_block)
+        for path_text in path_texts:
+            rec = _parse_path(host, vrf, prefix, paths_available, path_text)
+            records.append(rec)
 
-
-# ── Column definitions (order = HTML table column order) ─────────────────────
-
-COLUMNS = [
-    {"key": "host",                "label": "Device",           "filterable": True},
-    {"key": "vrf",                 "label": "VRF",              "filterable": True,  "badge": False},
-    {"key": "neighbor",            "label": "Neighbor",         "filterable": False},
-    {"key": "description",         "label": "Description",      "filterable": False},
-    {"key": "remote_as",           "label": "Remote AS",        "filterable": True},
-    {"key": "state",               "label": "State",            "filterable": True,  "badge": True},
-    {"key": "uptime",              "label": "Uptime",           "filterable": False},
-    {"key": "address_families",    "label": "Address Families", "filterable": True},
-    {"key": "prefixes_received",   "label": "Pfx Rcvd",        "filterable": False, "numeric": True},
-    {"key": "prefixes_advertised", "label": "Pfx Advd",        "filterable": False, "numeric": True},
-    {"key": "msgs_in",             "label": "Msgs In",          "filterable": False, "numeric": True},
-    {"key": "msgs_out",            "label": "Msgs Out",         "filterable": False, "numeric": True},
-    {"key": "resets",              "label": "Resets",           "filterable": False, "numeric": True},
-    {"key": "router_id",           "label": "Neighbor RID",     "filterable": False},
-    {"key": "hold_time",           "label": "Hold",             "filterable": False},
-    {"key": "keepalive",           "label": "KA Interval",      "filterable": False},
-]
-
-TITLE = "BGP Neighbor Detail"
-COMMAND = "show ip bgp detail vrf all"
-
-# Slug must match sanitize(COMMAND) from collect.py
-# sanitize("show ip bgp detail vrf all") → "show_ip_bgp_detail_vrf_all"
-# sanitize("show ip bgp detail")         → "show_ip_bgp_detail"
-# parse_bgp.py looks for both automatically
-COMMAND_SLUGS = [
-    "show_ip_bgp_detail_vrf_all",
-    "show_ip_bgp_detail",
-]
+    return records
