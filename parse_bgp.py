@@ -8,7 +8,7 @@ Usage:
     python3 parse_bgp.py -o report.html   # custom output filename
 
 Automatically picks up files from both:
-    - show ip bgp vrf all detail  → *_show_ip_bgp_vrf_all_detail.txt
+    - show ip bgp detail vrf all  → *_show_ip_bgp_vrf_all_detail.txt
     - show ip bgp detail          → *_show_ip_bgp_detail.txt
 """
 

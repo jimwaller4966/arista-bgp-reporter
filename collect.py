@@ -11,7 +11,7 @@ Device list: devices.txt (one hostname/IP per line, # for comments)
 Output:      output/<hostname>_<sanitized_command>.txt
 
 VRF note:
-    Default command is 'show ip bgp vrf all detail' which covers all VRFs on EOS.
+    Default command is 'show ip bgp detail vrf all' which covers all VRFs on EOS.
     If your devices don't support 'vrf all', use:
         python3 collect.py "show ip bgp detail"
     or specify per-VRF commands in a commands.txt file.
@@ -36,7 +36,7 @@ OUTPUT_DIR = "output"
 # Primary command — 'vrf all' gets default + all named VRFs in one shot on EOS.
 # If a device doesn't support it, the script will warn you and save the error output.
 DEFAULT_COMMANDS = [
-    "show ip bgp vrf all detail",
+    "show ip bgp detail vrf all",
 ]
 
 
@@ -129,7 +129,7 @@ def main():
     print(f"Devices:  {len(devices)}")
     print(f"Commands: {commands}")
     print(f"Output:   {OUTPUT_DIR}/\n")
-    print("NOTE: Default uses 'show ip bgp vrf all detail'.")
+    print("NOTE: Default uses 'show ip bgp detail vrf all'.")
     print("      If a device errors, re-run with: python3 collect.py 'show ip bgp detail'\n")
 
     username = input("Username: ").strip()
