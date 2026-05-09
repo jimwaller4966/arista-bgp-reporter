@@ -41,13 +41,13 @@ def _split_vrf_blocks(raw_text):
 
     Format A — 'show ip bgp vrf all detail' (EOS inserts VRF header lines):
         VRF: default
-           BGP neighbor is 10.0.0.1 ...
+           BGP routing table entry for 10.0.0.1 ...
            ...
         VRF: MGMT
-           BGP neighbor is 192.168.1.1 ...
+           BGP routing table entry for 192.168.1.1 ...
 
     Format B — 'show ip bgp detail' (no VRF headers, implicit default):
-        BGP neighbor is 10.0.0.1 ...
+        BGP routing table entry for 10.0.0.1 ...
         ...
 
     Returns list of (vrf, neighbor_block_text).
@@ -55,15 +55,15 @@ def _split_vrf_blocks(raw_text):
     results = []
 
     # Check if output contains VRF section headers
-    vrf_header_re = re.compile(r"^VRF:\s+(\S+)", re.MULTILINE)
+    vrf_header_re = re.compile(r"^BGP routing table information for VRF (\S+)", re.MULTILINE)
     vrf_matches = list(vrf_header_re.finditer(raw_text))
 
     if not vrf_matches:
         # Format B — no VRF headers, treat everything as default VRF
-        neighbor_blocks = re.split(r"(?=^BGP neighbor is )", raw_text, flags=re.MULTILINE)
+        neighbor_blocks = re.split(r"(?=^BGP routing table entry for )", raw_text, flags=re.MULTILINE)
         for block in neighbor_blocks:
             block = block.strip()
-            if block.startswith("BGP neighbor is "):
+            if block.startswith("BGP routing table entry for "):
                 results.append(("default", block))
         return results
 
@@ -74,10 +74,10 @@ def _split_vrf_blocks(raw_text):
         section_end = vrf_matches[i + 1].start() if i + 1 < len(vrf_matches) else len(raw_text)
         section_text = raw_text[section_start:section_end]
 
-        neighbor_blocks = re.split(r"(?=^BGP neighbor is )", section_text, flags=re.MULTILINE)
+        neighbor_blocks = re.split(r"(?=^BGP routing table entry for )", section_text, flags=re.MULTILINE)
         for block in neighbor_blocks:
             block = block.strip()
-            if block.startswith("BGP neighbor is "):
+            if block.startswith("BGP routing table entry for "):
                 results.append((vrf_name, block))
 
     return results
@@ -86,7 +86,7 @@ def _split_vrf_blocks(raw_text):
 # ── Per-neighbor block parser ─────────────────────────────────────────────────
 
 def _parse_neighbor_block(host, vrf, block):
-    neighbor = _extract(r"^BGP neighbor is (\S+)", block)
+    neighbor = _extract(r"^BGP routing table entry for (\S+)", block)
     remote_as = _extract(r"remote AS (\d+)", block)
     local_as = _extract(r"local AS (\d+)", block)
     description = _extract(r"Description: (.+)", block)
@@ -201,10 +201,10 @@ TITLE = "BGP Neighbor Detail"
 COMMAND = "show ip bgp vrf all detail"
 
 # Slug must match sanitize(COMMAND) from collect.py
-# sanitize("show ip bgp vrf all detail") → "show_ip_bgp_vrf_all_detail"
+# sanitize("show ip bgp vrf all detail") → "show_ip_bgp_detail_vrf_all"
 # sanitize("show ip bgp detail")         → "show_ip_bgp_detail"
 # parse_bgp.py looks for both automatically
 COMMAND_SLUGS = [
-    "show_ip_bgp_vrf_all_detail",
+    "show_ip_bgp_detail_vrf_all",
     "show_ip_bgp_detail",
 ]
