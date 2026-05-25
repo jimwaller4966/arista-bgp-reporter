@@ -56,7 +56,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BGP Route Detail Report</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
 
   :root {
     --bg:        #0a0e14;
@@ -98,7 +98,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
 
   .header-left h1 {
-    font-family: 'Syne', sans-serif;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 22px;
     font-weight: 800;
     color: var(--accent);
@@ -140,7 +140,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .stat:last-child { border-right: none; }
 
   .stat-val {
-    font-family: 'Syne', sans-serif;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 26px;
     font-weight: 800;
     line-height: 1;
@@ -395,35 +395,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <script>
 const RAW = __JSON_DATA__;
 
-function vrfClass(vrf) {{
+function vrfClass(vrf) {
   if (vrf === 'default') return 'vrf-default';
   if (vrf === 'PROD')    return 'vrf-PROD';
   if (vrf === 'MGMT')    return 'vrf-MGMT';
   return 'vrf-other';
-}}
+}
 
-function communityHTML(commStr, highlightRegex) {{
+function communityHTML(commStr, highlightRegex) {
   if (!commStr) return '<span class="no-community">—</span>';
   const tags = commStr.trim().split(/\s+/);
-  return '<div class="communities">' + tags.map(t => {{
+  return '<div class="communities">' + tags.map(t => {
     const cls = (highlightRegex && highlightRegex.test(t)) ? 'community-tag highlight' : 'community-tag';
-    return `<span class="${{cls}}">${{t}}</span>`;
-  }}).join('') + '</div>';
-}}
+    return `<span class="${cls}">${t}</span>`;
+  }).join('') + '</div>';
+}
 
-function buildOptions(id, values) {{
+function buildOptions(id, values) {
   const sel = document.getElementById(id);
   const cur = sel.value;
   while (sel.options.length > 1) sel.remove(1);
-  values.forEach(v => {{
+  values.forEach(v => {
     const o = document.createElement('option');
     o.value = o.textContent = v;
     sel.appendChild(o);
-  }});
+  });
   sel.value = cur;
-}}
+}
 
-function applyFilters() {{
+function applyFilters() {
   const fDevice    = document.getElementById('f-device').value;
   const fVrf       = document.getElementById('f-vrf').value;
   const fPrefix    = document.getElementById('f-prefix').value.trim().toLowerCase();
@@ -433,12 +433,12 @@ function applyFilters() {{
   const fHasComm   = document.getElementById('f-has-community').checked;
 
   let commRegex = null;
-  try {{ if (fCommStr) commRegex = new RegExp(fCommStr, 'i'); }} catch(e) {{}}
+  try { if (fCommStr) commRegex = new RegExp(fCommStr, 'i'); } catch(e) {}
 
   const rows = document.querySelectorAll('#table-body tr');
   let visible = 0;
 
-  rows.forEach(row => {{
+  rows.forEach(row => {
     const d = row.dataset;
     let show = true;
     if (fDevice && d.device !== fDevice) show = false;
@@ -450,47 +450,47 @@ function applyFilters() {{
     if (commRegex && !commRegex.test(d.communities)) show = false;
 
     row.classList.toggle('hidden', !show);
-    if (show) {{
+    if (show) {
       // Re-render communities with highlight
       const commCell = row.querySelector('.comm-cell');
       if (commCell) commCell.innerHTML = communityHTML(d.communities, commRegex);
       visible++;
-    }}
-  }});
+    }
+  });
 
-  document.getElementById('row-count').textContent = `Showing ${{visible}} of ${{rows.length}} paths`;
-}}
+  document.getElementById('row-count').textContent = `Showing ${visible} of ${rows.length} paths`;
+}
 
-function resetFilters() {{
+function resetFilters() {
   ['f-device','f-vrf'].forEach(id => document.getElementById(id).value = '');
   ['f-prefix','f-aspath','f-community'].forEach(id => document.getElementById(id).value = '');
   ['f-best','f-has-community'].forEach(id => document.getElementById(id).checked = false);
   applyFilters();
-}}
+}
 
 let sortCol = -1, sortAsc = true;
-function sortTable(col) {{
-  if (sortCol === col) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
+function sortTable(col) {
+  if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
   document.querySelectorAll('thead th').forEach((th,i) => th.classList.toggle('sorted', i===col));
   const tbody = document.getElementById('table-body');
   const rows  = Array.from(tbody.querySelectorAll('tr'));
-  rows.sort((a,b) => {{
+  rows.sort((a,b) => {
     const av = a.cells[col]?.textContent.trim() || '';
     const bv = b.cells[col]?.textContent.trim() || '';
-    return sortAsc ? av.localeCompare(bv, undefined, {{numeric:true}}) : bv.localeCompare(av, undefined, {{numeric:true}});
-  }});
+    return sortAsc ? av.localeCompare(bv, undefined, {numeric:true}) : bv.localeCompare(av, undefined, {numeric:true});
+  });
   rows.forEach(r => tbody.appendChild(r));
-}}
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-(function() {{
+(function() {
   const devices = [...new Set(RAW.map(r => r.host))].sort();
   const vrfs    = [...new Set(RAW.map(r => r.vrf))].sort();
   buildOptions('f-device', devices);
   buildOptions('f-vrf',    vrfs);
 
   const tbody = document.getElementById('table-body');
-  RAW.forEach(r => {{
+  RAW.forEach(r => {
     const tr = document.createElement('tr');
     if (r.best === '✓') tr.classList.add('best-path');
     tr.dataset.device      = r.host;
@@ -501,29 +501,29 @@ function sortTable(col) {{
     tr.dataset.communities = r.communities || '';
 
     tr.innerHTML = `
-      <td>${{r.host}}</td>
-      <td><span class="badge-vrf ${{vrfClass(r.vrf)}}">${{r.vrf}}</span></td>
-      <td class="prefix">${{r.prefix}}</td>
-      <td style="color:var(--muted)">${{r.paths_available}}</td>
-      <td class="as-path">${{r.as_path}}</td>
-      <td class="nexthop">${{r.next_hop}}</td>
-      <td>${{r.origin}}</td>
-      <td>${{r.local_pref}}</td>
-      <td>${{r.weight}}</td>
-      <td style="color:var(--muted)">${{r.age}}</td>
-      <td><span class="check">${{r.best}}</span></td>
-      <td><span class="check">${{r.valid}}</span></td>
-      <td class="comm-cell">${{communityHTML(r.communities, null)}}</td>
+      <td>${r.host}</td>
+      <td><span class="badge-vrf ${vrfClass(r.vrf)}">${r.vrf}</span></td>
+      <td class="prefix">${r.prefix}</td>
+      <td style="color:var(--muted)">${r.paths_available}</td>
+      <td class="as-path">${r.as_path}</td>
+      <td class="nexthop">${r.next_hop}</td>
+      <td>${r.origin}</td>
+      <td>${r.local_pref}</td>
+      <td>${r.weight}</td>
+      <td style="color:var(--muted)">${r.age}</td>
+      <td><span class="check">${r.best}</span></td>
+      <td><span class="check">${r.valid}</span></td>
+      <td class="comm-cell">${communityHTML(r.communities, null)}</td>
     `;
     tbody.appendChild(tr);
-  }});
+  });
 
   ['f-device','f-vrf'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
   ['f-prefix','f-aspath','f-community'].forEach(id => document.getElementById(id).addEventListener('input', applyFilters));
   ['f-best','f-has-community'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
 
   applyFilters();
-}})();
+})();
 </script>
 </body>
 </html>
