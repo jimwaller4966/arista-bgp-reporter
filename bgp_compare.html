@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BGP Compare</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+  :root {
+    --bg:        #0a0e14;
+    --bg2:       #0f1520;
+    --bg3:       #141c2e;
+    --border:    #1e2d4a;
+    --accent:    #00d4ff;
+    --accent2:   #7c3aed;
+    --accent3:   #10b981;
+    --warn:      #f59e0b;
+    --danger:    #ef4444;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --added-bg:  rgba(16,185,129,0.08);
+    --added-bd:  #10b981;
+    --removed-bg:rgba(239,68,68,0.08);
+    --removed-bd:#ef4444;
+    --changed-bg:rgba(245,158,11,0.08);
+    --changed-bd:#f59e0b;
+    --tag-bg:    #1a2640;
+    --tag-text:  #7dd3fc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .header-left .cmd-badge {
+    display: inline-block;
+    margin-top: 4px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── File pickers ── */
+  .pickers {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 28px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .picker-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 260px;
+  }
+
+  .picker-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .picker-label span {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .before-dot { background: var(--danger); }
+  .after-dot  { background: var(--accent3); }
+
+  .file-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .file-input-wrap:hover { border-color: var(--accent); }
+  .file-input-wrap.loaded { border-color: var(--accent3); }
+
+  .file-input-wrap input[type=file] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .file-name {
+    color: var(--muted);
+    font-size: 11px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-name.loaded { color: var(--text); }
+
+  .btn-browse {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-browse:hover { border-color: var(--accent); background: var(--bg3); }
+
+  .btn-compare {
+    background: var(--accent);
+    border: none;
+    color: #000;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .btn-compare:hover { opacity: 0.85; }
+  .btn-compare:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Summary bar ── */
+  .summary {
+    display: none;
+    gap: 0;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    flex-wrap: wrap;
+  }
+  .summary.visible { display: flex; }
+
+  .stat {
+    padding: 14px 24px 14px 0;
+    margin-right: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-val {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .stat-val.red    { color: var(--danger); }
+  .stat-val.green  { color: var(--accent3); }
+  .stat-val.amber  { color: var(--warn); }
+  .stat-val.purple { color: var(--accent2); }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* ── No diff message ── */
+  .no-diff {
+    display: none;
+    padding: 48px 28px;
+    text-align: center;
+    color: var(--accent3);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .no-diff.visible { display: block; }
+
+  /* ── Sections ── */
+  .sections {
+    padding: 20px 28px 40px;
+  }
+
+  .section {
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .section-header:hover { background: var(--bg3); }
+
+  .section-indicator {
+    width: 4px;
+    height: 20px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .ind-removed { background: var(--danger); }
+  .ind-added   { background: var(--accent3); }
+  .ind-changed { background: var(--warn); }
+  .ind-best    { background: var(--accent2); }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex: 1;
+  }
+
+  .section-count {
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+
+  .section-chevron {
+    color: var(--muted);
+    font-size: 11px;
+    transition: transform 0.2s;
+  }
+  .section-chevron.open { transform: rotate(180deg); }
+
+  .section-body {
+    display: none;
+    overflow-x: auto;
+  }
+  .section-body.open { display: block; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    background: var(--bg3);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg3); }
+
+  td {
+    padding: 7px 10px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  td.prefix  { color: var(--accent); font-weight: 500; }
+  td.device  { color: var(--muted); }
+  td.peer    { color: #cbd5e1; }
+
+  .badge-vrf {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .vrf-default { background: #1e3a5f; color: #7dd3fc; }
+  .vrf-PROD    { background: #2d1b4e; color: #c4b5fd; }
+  .vrf-MGMT    { background: #1a3a2a; color: #6ee7b7; }
+  .vrf-other   { background: #2a2a1a; color: #fde68a; }
+
+  /* row tints */
+  tr.row-removed { background: var(--removed-bg); }
+  tr.row-removed:hover { background: rgba(239,68,68,0.14); }
+  tr.row-added   { background: var(--added-bg); }
+  tr.row-added:hover   { background: rgba(16,185,129,0.14); }
+  tr.row-changed { background: var(--changed-bg); }
+  tr.row-changed:hover { background: rgba(245,158,11,0.14); }
+
+  .val-old { color: var(--danger); text-decoration: line-through; opacity: 0.8; }
+  .val-new { color: var(--accent3); }
+  .val-arrow { color: var(--muted); margin: 0 4px; }
+
+  .community-tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    border: 1px solid #1e3a5f;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin: 1px;
+  }
+  .tag-removed { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: #7f1d1d; text-decoration: line-through; }
+  .tag-added   { background: rgba(16,185,129,0.15); color: #6ee7b7; border-color: #065f46; }
+  .tag-same    { background: var(--tag-bg); color: var(--tag-text); border-color: #1e3a5f; }
+
+  .no-change { color: var(--muted); font-size: 11px; font-style: italic; }
+
+  .error-msg {
+    padding: 24px 28px;
+    color: var(--danger);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>BGP Compare</h1>
+    <span class="cmd-badge">before / after diff</span>
+  </div>
+  <div style="color:var(--muted);font-size:11px;text-align:right;">
+    Key: device + VRF + prefix + peer IP
+  </div>
+</header>
+
+<div class="pickers">
+  <div class="picker-group">
+    <div class="picker-label"><span class="before-dot"></span>Before (pre-change)</div>
+    <div class="file-input-wrap" id="before-wrap" onclick="document.getElementById('before-file').click()">
+      <input type="file" id="before-file" accept=".html">
+      <span class="file-name" id="before-name">No file selected…</span>
+      <button class="btn-browse" type="button">Browse</button>
+    </div>
+  </div>
+
+  <div class="picker-group">
+    <div class="picker-label"><span class="after-dot"></span>After (post-change)</div>
+    <div class="file-input-wrap" id="after-wrap" onclick="document.getElementById('after-file').click()">
+      <input type="file" id="after-file" accept=".html">
+      <span class="file-name" id="after-name">No file selected…</span>
+      <button class="btn-browse" type="button">Browse</button>
+    </div>
+  </div>
+
+  <button class="btn-compare" id="btn-compare" disabled onclick="runCompare()">Compare</button>
+</div>
+
+<div class="summary" id="summary">
+  <div class="stat">
+    <div class="stat-val red"   id="s-removed">0</div>
+    <div class="stat-label">Routes Removed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val green" id="s-added">0</div>
+    <div class="stat-label">Routes Added</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-aspath">0</div>
+    <div class="stat-label">AS Path Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-nexthop">0</div>
+    <div class="stat-label">Next-Hop Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-community">0</div>
+    <div class="stat-label">Community Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val purple" id="s-best">0</div>
+    <div class="stat-label">Best Path Changed</div>
+  </div>
+</div>
+
+<div class="no-diff" id="no-diff">✓ No differences found — snapshots are identical.</div>
+
+<div class="sections" id="sections"></div>
+
+<script>
+// ── File loading ──────────────────────────────────────────────────────────────
+let beforeData = null, afterData = null;
+
+function extractRaw(text) {
+  // Pull const RAW = [...]; out of the HTML file
+  const m = text.match(/const RAW\s*=\s*(\[[\s\S]*?\]);/);
+  if (!m) return null;
+  try { return JSON.parse(m[1]); } catch(e) { return null; }
+}
+
+function setupPicker(inputId, wrapId, nameId, slot) {
+  document.getElementById(inputId).addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const data = extractRaw(ev.target.result);
+      const nameEl = document.getElementById(nameId);
+      const wrapEl = document.getElementById(wrapId);
+      if (!data) {
+        nameEl.textContent = '⚠ Could not read BGP data from file';
+        nameEl.classList.remove('loaded');
+        wrapEl.classList.remove('loaded');
+        if (slot === 'before') beforeData = null;
+        else afterData = null;
+      } else {
+        nameEl.textContent = file.name + '  (' + data.length + ' paths)';
+        nameEl.classList.add('loaded');
+        wrapEl.classList.add('loaded');
+        if (slot === 'before') beforeData = data;
+        else afterData = data;
+      }
+      document.getElementById('btn-compare').disabled = !(beforeData && afterData);
+    };
+    reader.readAsText(file);
+  });
+}
+
+setupPicker('before-file', 'before-wrap', 'before-name', 'before');
+setupPicker('after-file',  'after-wrap',  'after-name',  'after');
+
+// ── Diff logic ────────────────────────────────────────────────────────────────
+function makeKey(r) {
+  return [r.host, r.vrf, r.prefix, r.peer_ip].join('||');
+}
+
+function buildMap(records) {
+  const m = new Map();
+  records.forEach(r => m.set(makeKey(r), r));
+  return m;
+}
+
+function diffCommunities(oldStr, newStr) {
+  const oldSet = new Set((oldStr || '').trim().split(/\s+/).filter(Boolean));
+  const newSet = new Set((newStr || '').trim().split(/\s+/).filter(Boolean));
+  const all    = new Set([...oldSet, ...newSet]);
+  let html = '';
+  all.forEach(c => {
+    if (oldSet.has(c) && newSet.has(c)) html += `<span class="community-tag tag-same">${c}</span>`;
+    else if (oldSet.has(c))             html += `<span class="community-tag tag-removed">${c}</span>`;
+    else                                html += `<span class="community-tag tag-added">${c}</span>`;
+  });
+  return html || '<span style="color:var(--muted)">—</span>';
+}
+
+function vrfBadge(vrf) {
+  const cls = vrf === 'default' ? 'vrf-default' : vrf === 'PROD' ? 'vrf-PROD' : vrf === 'MGMT' ? 'vrf-MGMT' : 'vrf-other';
+  return `<span class="badge-vrf ${cls}">${vrf}</span>`;
+}
+
+function changed(a, b) { return (a || '').trim() !== (b || '').trim(); }
+
+function runCompare() {
+  const beforeMap = buildMap(beforeData);
+  const afterMap  = buildMap(afterData);
+
+  const removed   = [];
+  const added     = [];
+  const aspathChg = [];
+  const nexthopChg= [];
+  const commChg   = [];
+  const bestChg   = [];
+
+  // Routes in before but not after = removed
+  beforeMap.forEach((r, key) => {
+    if (!afterMap.has(key)) removed.push(r);
+  });
+
+  // Routes in after but not before = added
+  afterMap.forEach((r, key) => {
+    if (!beforeMap.has(key)) added.push(r);
+  });
+
+  // Routes in both — check for changes
+  beforeMap.forEach((before, key) => {
+    if (!afterMap.has(key)) return;
+    const after = afterMap.get(key);
+
+    if (changed(before.as_path,    after.as_path))    aspathChg.push({before, after});
+    if (changed(before.next_hop,   after.next_hop))   nexthopChg.push({before, after});
+    if (changed(before.communities,after.communities)) commChg.push({before, after});
+    if (changed(before.best,       after.best))        bestChg.push({before, after});
+  });
+
+  // Update summary counts
+  document.getElementById('s-removed').textContent  = removed.length;
+  document.getElementById('s-added').textContent    = added.length;
+  document.getElementById('s-aspath').textContent   = aspathChg.length;
+  document.getElementById('s-nexthop').textContent  = nexthopChg.length;
+  document.getElementById('s-community').textContent = commChg.length;
+  document.getElementById('s-best').textContent     = bestChg.length;
+
+  document.getElementById('summary').classList.add('visible');
+
+  const total = removed.length + added.length + aspathChg.length + nexthopChg.length + commChg.length + bestChg.length;
+  document.getElementById('no-diff').classList.toggle('visible', total === 0);
+
+  // Render sections
+  const container = document.getElementById('sections');
+  container.innerHTML = '';
+
+  if (removed.length)   container.appendChild(buildRemovedSection(removed));
+  if (added.length)     container.appendChild(buildAddedSection(added));
+  if (aspathChg.length) container.appendChild(buildChangedSection('AS Path Changed', 'ind-changed', aspathChg, buildAspathRow));
+  if (nexthopChg.length)container.appendChild(buildChangedSection('Next-Hop Changed','ind-changed', nexthopChg, buildNexthopRow));
+  if (commChg.length)   container.appendChild(buildChangedSection('Community Changed','ind-changed', commChg, buildCommRow));
+  if (bestChg.length)   container.appendChild(buildChangedSection('Best Path Changed','ind-best',   bestChg, buildBestRow));
+}
+
+// ── Section builders ──────────────────────────────────────────────────────────
+function makeSection(title, indClass, count, bodyHTML, startOpen) {
+  const sec = document.createElement('div');
+  sec.className = 'section';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'section-header';
+  hdr.innerHTML = `
+    <div class="section-indicator ${indClass}"></div>
+    <div class="section-title">${title}</div>
+    <div class="section-count">${count} route${count !== 1 ? 's' : ''}</div>
+    <div class="section-chevron ${startOpen ? 'open' : ''}">▼</div>
+  `;
+
+  const body = document.createElement('div');
+  body.className = 'section-body' + (startOpen ? ' open' : '');
+  body.innerHTML = bodyHTML;
+
+  hdr.addEventListener('click', () => {
+    body.classList.toggle('open');
+    hdr.querySelector('.section-chevron').classList.toggle('open');
+  });
+
+  sec.appendChild(hdr);
+  sec.appendChild(body);
+  return sec;
+}
+
+function simpleTable(headers, rows) {
+  const ths = headers.map(h => `<th>${h}</th>`).join('');
+  return `<table><thead><tr>${ths}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+function buildRemovedSection(records) {
+  const rows = records.map(r => `
+    <tr class="row-removed">
+      <td class="device">${r.host}</td>
+      <td>${vrfBadge(r.vrf)}</td>
+      <td class="prefix">${r.prefix}</td>
+      <td class="peer">${r.peer_ip}</td>
+      <td>${r.as_path}</td>
+      <td>${r.next_hop}</td>
+      <td>${r.communities ? r.communities.split(' ').map(c=>`<span class="community-tag">${c}</span>`).join('') : '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`);
+  const html = simpleTable(['Device','VRF','Prefix','Peer IP','AS Path','Next Hop','Communities'], rows);
+  return makeSection('Routes Removed', 'ind-removed', records.length, html, true);
+}
+
+function buildAddedSection(records) {
+  const rows = records.map(r => `
+    <tr class="row-added">
+      <td class="device">${r.host}</td>
+      <td>${vrfBadge(r.vrf)}</td>
+      <td class="prefix">${r.prefix}</td>
+      <td class="peer">${r.peer_ip}</td>
+      <td>${r.as_path}</td>
+      <td>${r.next_hop}</td>
+      <td>${r.communities ? r.communities.split(' ').map(c=>`<span class="community-tag tag-added">${c}</span>`).join('') : '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`);
+  const html = simpleTable(['Device','VRF','Prefix','Peer IP','AS Path','Next Hop','Communities'], rows);
+  return makeSection('Routes Added', 'ind-added', records.length, html, true);
+}
+
+function buildAspathRow(pair) {
+  return `<tr class="row-changed">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>
+      <span class="val-old">${pair.before.as_path}</span>
+      <span class="val-arrow">→</span>
+      <span class="val-new">${pair.after.as_path}</span>
+    </td>
+  </tr>`;
+}
+
+function buildNexthopRow(pair) {
+  return `<tr class="row-changed">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>
+      <span class="val-old">${pair.before.next_hop}</span>
+      <span class="val-arrow">→</span>
+      <span class="val-new">${pair.after.next_hop}</span>
+    </td>
+  </tr>`;
+}
+
+function buildCommRow(pair) {
+  return `<tr class="row-changed">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>${diffCommunities(pair.before.communities, pair.after.communities)}</td>
+  </tr>`;
+}
+
+function buildBestRow(pair) {
+  const wasB = pair.before.best === '✓';
+  const isB  = pair.after.best  === '✓';
+  const desc = wasB && !isB ? '<span class="val-old">was best</span> <span class="val-arrow">→</span> <span style="color:var(--muted)">no longer best</span>'
+                            : '<span style="color:var(--muted)">not best</span> <span class="val-arrow">→</span> <span class="val-new">now best</span>';
+  return `<tr class="row-changed">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>${desc}</td>
+  </tr>`;
+}
+
+function buildChangedSection(title, indClass, pairs, rowFn) {
+  const headers = title === 'Community Changed'
+    ? ['Device','VRF','Prefix','Peer IP','Communities']
+    : title === 'AS Path Changed'
+    ? ['Device','VRF','Prefix','Peer IP','AS Path']
+    : title === 'Next-Hop Changed'
+    ? ['Device','VRF','Prefix','Peer IP','Next Hop']
+    : ['Device','VRF','Prefix','Peer IP','Change'];
+  const rows = pairs.map(rowFn);
+  const html = simpleTable(headers, rows);
+  return makeSection(title, indClass, pairs.length, html, true);
+}
+</script>
+</body>
+</html>

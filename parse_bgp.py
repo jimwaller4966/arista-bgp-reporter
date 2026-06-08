@@ -22,7 +22,8 @@ except ImportError:
     sys.exit(1)
 
 OUTPUT_DIR     = "output"
-DEFAULT_OUTPUT = "bgp_report.html"
+RESULTS_DIR    = "results"
+DEFAULT_OUTPUT = None   # set at runtime to results/bgp_report_YYYYMMDD_HHMMSS.html
 
 # ── File loading ──────────────────────────────────────────────────────────────
 def load_files(input_dir):
@@ -563,14 +564,21 @@ def render_html(records, output_file):
 
 def main():
     parser = argparse.ArgumentParser(description="BGP Detail Report Generator")
-    parser.add_argument("-i", "--input",  default=OUTPUT_DIR,    help="Input directory")
-    parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT, help="Output HTML file")
+    parser.add_argument("-i", "--input",  default=OUTPUT_DIR, help="Input directory")
+    parser.add_argument("-o", "--output", default=None,        help="Output HTML file (default: results/bgp_report_YYYYMMDD_HHMMSS.html)")
     args = parser.parse_args()
+
+    if args.output:
+        output_file = args.output
+    else:
+        os.makedirs(RESULTS_DIR, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(RESULTS_DIR, f"bgp_report_{ts}.html")
 
     print(f"\nBGP Detail Parser")
     print("=" * 40)
     print(f"Input:  {args.input}/")
-    print(f"Output: {args.output}")
+    print(f"Output: {output_file}")
     print()
 
     records = load_files(args.input)
@@ -578,7 +586,7 @@ def main():
         print("No BGP path records parsed.")
         sys.exit(1)
 
-    render_html(records, args.output)
+    render_html(records, output_file)
 
 
 if __name__ == "__main__":
