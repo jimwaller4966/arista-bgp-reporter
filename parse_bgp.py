@@ -210,6 +210,47 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .btn-reset:hover { border-color: var(--accent); color: var(--accent); }
 
+  .btn-not {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .btn-not:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-not.active {
+    background: rgba(239,68,68,0.15);
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn-export {
+    background: transparent;
+    border: 1px solid var(--accent3);
+    color: var(--accent3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-export:hover { background: rgba(16,185,129,0.1); }
+
   .row-count {
     margin-left: auto;
     color: var(--muted);
@@ -344,28 +385,51 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 <div class="filters">
   <span class="filter-label">Device</span>
-  <select id="f-device"><option value="">All</option></select>
+  <div class="filter-group">
+    <select id="f-device"><option value="">All</option></select>
+    <button class="btn-not" id="not-device" onclick="toggleNot('device')" title="Invert filter">NOT</button>
+  </div>
 
   <span class="filter-label">VRF</span>
-  <select id="f-vrf"><option value="">All</option></select>
+  <div class="filter-group">
+    <select id="f-vrf"><option value="">All</option></select>
+    <button class="btn-not" id="not-vrf" onclick="toggleNot('vrf')" title="Invert filter">NOT</button>
+  </div>
 
   <span class="filter-label">Prefix</span>
-  <input id="f-prefix" type="text" placeholder="e.g. 10.10" style="width:130px">
+  <div class="filter-group">
+    <input id="f-prefix" type="text" placeholder="e.g. 10.10" style="width:130px">
+    <button class="btn-not" id="not-prefix" onclick="toggleNot('prefix')" title="Invert filter">NOT</button>
+  </div>
 
   <span class="filter-label">AS Path</span>
-  <input id="f-aspath" type="text" placeholder="e.g. 65002" style="width:110px">
+  <div class="filter-group">
+    <input id="f-aspath" type="text" placeholder="e.g. 65002" style="width:110px">
+    <button class="btn-not" id="not-aspath" onclick="toggleNot('aspath')" title="Invert filter">NOT</button>
+  </div>
 
   <span class="filter-label">Community (regex)</span>
-  <input id="f-community" type="text" placeholder="e.g. 65001:12200 or :10$" class="community-search">
+  <div class="filter-group">
+    <input id="f-community" type="text" placeholder="e.g. 65001:12200 or :10$" class="community-search">
+    <button class="btn-not" id="not-community" onclick="toggleNot('community')" title="Invert filter">NOT</button>
+  </div>
 
-  <label style="color:var(--muted);font-size:11px;display:flex;align-items:center;gap:5px;">
-    <input type="checkbox" id="f-best"> Best only
-  </label>
-  <label style="color:var(--muted);font-size:11px;display:flex;align-items:center;gap:5px;">
-    <input type="checkbox" id="f-has-community"> Has community
-  </label>
+  <div class="filter-group">
+    <label style="color:var(--muted);font-size:11px;display:flex;align-items:center;gap:5px;">
+      <input type="checkbox" id="f-best"> Best only
+    </label>
+    <button class="btn-not" id="not-best" onclick="toggleNot('best')" title="Invert filter">NOT</button>
+  </div>
+
+  <div class="filter-group">
+    <label style="color:var(--muted);font-size:11px;display:flex;align-items:center;gap:5px;">
+      <input type="checkbox" id="f-has-community"> Has community
+    </label>
+    <button class="btn-not" id="not-has-community" onclick="toggleNot('has-community')" title="Invert filter">NOT</button>
+  </div>
 
   <button class="btn-reset" onclick="resetFilters()">Reset</button>
+  <button class="btn-export" onclick="exportCSV()">Export CSV</button>
   <span class="row-count" id="row-count"></span>
 </div>
 
@@ -424,6 +488,16 @@ function buildOptions(id, values) {
   sel.value = cur;
 }
 
+// NOT state per filter key
+const notState = {device:false, vrf:false, prefix:false, aspath:false, community:false, best:false, 'has-community':false};
+
+function toggleNot(key) {
+  notState[key] = !notState[key];
+  const btn = document.getElementById('not-' + key);
+  btn.classList.toggle('active', notState[key]);
+  applyFilters();
+}
+
 function applyFilters() {
   const fDevice    = document.getElementById('f-device').value;
   const fVrf       = document.getElementById('f-vrf').value;
@@ -442,17 +516,38 @@ function applyFilters() {
   rows.forEach(row => {
     const d = row.dataset;
     let show = true;
-    if (fDevice && d.device !== fDevice) show = false;
-    if (fVrf    && d.vrf    !== fVrf)    show = false;
-    if (fPrefix && !d.prefix.includes(fPrefix)) show = false;
-    if (fAspath && !d.aspath.toLowerCase().includes(fAspath)) show = false;
-    if (fBest   && d.best !== '1') show = false;
-    if (fHasComm && !d.communities) show = false;
-    if (commRegex && !commRegex.test(d.communities)) show = false;
+
+    if (fDevice) {
+      const match = d.device === fDevice;
+      if (notState.device ? match : !match) show = false;
+    }
+    if (fVrf) {
+      const match = d.vrf === fVrf;
+      if (notState.vrf ? match : !match) show = false;
+    }
+    if (fPrefix) {
+      const match = d.prefix.includes(fPrefix);
+      if (notState.prefix ? match : !match) show = false;
+    }
+    if (fAspath) {
+      const match = d.aspath.toLowerCase().includes(fAspath);
+      if (notState.aspath ? match : !match) show = false;
+    }
+    if (fBest) {
+      const match = d.best === '1';
+      if (notState.best ? match : !match) show = false;
+    }
+    if (fHasComm) {
+      const match = !!d.communities;
+      if (notState['has-community'] ? match : !match) show = false;
+    }
+    if (commRegex) {
+      const match = commRegex.test(d.communities);
+      if (notState.community ? match : !match) show = false;
+    }
 
     row.classList.toggle('hidden', !show);
     if (show) {
-      // Re-render communities with highlight
       const commCell = row.querySelector('.comm-cell');
       if (commCell) commCell.innerHTML = communityHTML(d.communities, commRegex);
       visible++;
@@ -466,7 +561,47 @@ function resetFilters() {
   ['f-device','f-vrf'].forEach(id => document.getElementById(id).value = '');
   ['f-prefix','f-aspath','f-community'].forEach(id => document.getElementById(id).value = '');
   ['f-best','f-has-community'].forEach(id => document.getElementById(id).checked = false);
+  Object.keys(notState).forEach(k => {
+    notState[k] = false;
+    const btn = document.getElementById('not-' + k);
+    if (btn) btn.classList.remove('active');
+  });
   applyFilters();
+}
+
+function exportCSV() {
+  const rows = document.querySelectorAll('#table-body tr:not(.hidden)');
+  const headers = ['Device','VRF','Prefix','Paths','AS Path','Next Hop','Origin','LP','Weight','Age','Best','Valid','Communities'];
+  const dataKeys = ['device','vrf','prefix','paths','aspath','nexthop','origin','lp','weight','age','best','valid','communities'];
+
+  const csvRows = [headers.join(',')];
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    const vals = [
+      cells[0]?.textContent.trim()  || '',   // Device
+      cells[1]?.textContent.trim()  || '',   // VRF
+      cells[2]?.textContent.trim()  || '',   // Prefix
+      cells[3]?.textContent.trim()  || '',   // Paths
+      cells[4]?.textContent.trim()  || '',   // AS Path
+      cells[5]?.textContent.trim()  || '',   // Next Hop
+      cells[6]?.textContent.trim()  || '',   // Origin
+      cells[7]?.textContent.trim()  || '',   // LP
+      cells[8]?.textContent.trim()  || '',   // Weight
+      cells[9]?.textContent.trim()  || '',   // Age
+      cells[10]?.textContent.trim() || '',   // Best
+      cells[11]?.textContent.trim() || '',   // Valid
+      row.dataset.communities       || '',   // Communities (raw space-separated)
+    ];
+    csvRows.push(vals.map(v => '"' + v.replace(/"/g, '""') + '"').join(','));
+  });
+
+  const blob = new Blob([csvRows.join('\\n')], {type: 'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'bgp_report_filtered.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 let sortCol = -1, sortAsc = true;
@@ -491,14 +626,15 @@ function sortTable(col) {
   buildOptions('f-vrf',    vrfs);
 
   const tbody = document.getElementById('table-body');
+  const frag = document.createDocumentFragment();
   RAW.forEach(r => {
     const tr = document.createElement('tr');
-    if (r.best === '✓') tr.classList.add('best-path');
+    if (r.best === '\u2713') tr.classList.add('best-path');
     tr.dataset.device      = r.host;
     tr.dataset.vrf         = r.vrf;
     tr.dataset.prefix      = r.prefix.toLowerCase();
     tr.dataset.aspath      = r.as_path;
-    tr.dataset.best        = r.best === '✓' ? '1' : '';
+    tr.dataset.best        = r.best === '\u2713' ? '1' : '';
     tr.dataset.communities = r.communities || '';
 
     tr.innerHTML = `
@@ -516,14 +652,15 @@ function sortTable(col) {
       <td><span class="check">${r.valid}</span></td>
       <td class="comm-cell">${communityHTML(r.communities, null)}</td>
     `;
-    tbody.appendChild(tr);
+    frag.appendChild(tr);
   });
+  tbody.appendChild(frag);
 
   ['f-device','f-vrf'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
   ['f-prefix','f-aspath','f-community'].forEach(id => document.getElementById(id).addEventListener('input', applyFilters));
   ['f-best','f-has-community'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
 
-  applyFilters();
+  requestAnimationFrame(applyFilters);
 })();
 </script>
 </body>
