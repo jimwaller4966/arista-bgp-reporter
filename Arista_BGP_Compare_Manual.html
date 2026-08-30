@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BGP Compare (Manual Paste)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+  :root {
+    --bg:        #0a0e14;
+    --bg2:       #0f1520;
+    --bg3:       #141c2e;
+    --border:    #1e2d4a;
+    --accent:    #00d4ff;
+    --accent2:   #7c3aed;
+    --accent3:   #10b981;
+    --warn:      #f59e0b;
+    --danger:    #ef4444;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --added-bg:  rgba(16,185,129,0.08);
+    --added-bd:  #10b981;
+    --removed-bg:rgba(239,68,68,0.08);
+    --removed-bd:#ef4444;
+    --changed-bg:rgba(245,158,11,0.08);
+    --changed-bd:#f59e0b;
+    --tag-bg:    #1a2640;
+    --tag-text:  #7dd3fc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .howto {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 20px 28px 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .howto b { color: var(--text); }
+  .howto code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    color: var(--accent);
+  }
+
+  .columns {
+    display: flex;
+    gap: 20px;
+    padding: 16px 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .column {
+    flex: 1;
+    min-width: 380px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+
+  .column-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .column-title span.dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .before-dot { background: var(--danger); }
+  .after-dot  { background: var(--accent3); }
+
+  .btn-add {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .btn-add:hover { border-color: var(--accent); }
+
+  .device-block {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 12px;
+    background: var(--bg);
+  }
+  .device-block:last-child { margin-bottom: 0; }
+
+  .device-block-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+
+  .device-name {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .device-name:focus { outline: none; border-color: var(--accent); }
+
+  .btn-remove {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 5px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .btn-remove:hover { border-color: var(--danger); color: var(--danger); }
+
+  .device-paste {
+    width: 100%;
+    min-height: 120px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 8px 10px;
+    resize: vertical;
+  }
+  .device-paste:focus { outline: none; border-color: var(--accent); }
+  .device-paste::placeholder { color: var(--muted); }
+
+  .paste-status {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .paste-status.ok { color: var(--accent3); }
+  .paste-status.err { color: var(--danger); }
+
+  .actions {
+    padding: 0 28px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .btn-compare {
+    background: var(--accent);
+    border: none;
+    color: #000;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .btn-compare:hover { opacity: 0.85; }
+  .btn-compare:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .actions .hint { color: var(--muted); font-size: 11px; }
+
+  .summary {
+    display: none;
+    gap: 0;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    flex-wrap: wrap;
+  }
+  .summary.visible { display: flex; }
+
+  .stat {
+    padding: 14px 24px 14px 0;
+    margin-right: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-val {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .stat-val.red    { color: var(--danger); }
+  .stat-val.green  { color: var(--accent3); }
+  .stat-val.amber  { color: var(--warn); }
+  .stat-val.purple { color: var(--accent2); }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  .no-diff {
+    display: none;
+    padding: 48px 28px;
+    text-align: center;
+    color: var(--accent3);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .no-diff.visible { display: block; }
+
+  .filterbar {
+    display: none;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+  }
+  .filterbar.visible { display: flex; }
+
+  .f-input, .f-select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .f-input { flex: 1; min-width: 200px; }
+  .f-input:focus, .f-select:focus { outline: none; border-color: var(--accent); }
+  .f-select { cursor: pointer; }
+
+  .btn-clear {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 7px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-clear:hover { border-color: var(--accent); color: var(--text); }
+
+  .f-hint { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--text); }
+  thead th.sortable::after { content: '⇅'; margin-left: 5px; opacity: 0.35; font-size: 9px; }
+  thead th.sort-asc::after  { content: '▲'; opacity: 1; color: var(--accent); }
+  thead th.sort-desc::after { content: '▼'; opacity: 1; color: var(--accent); }
+
+  .sections {
+    padding: 20px 28px 40px;
+  }
+
+  .section {
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .section-header:hover { background: var(--bg3); }
+
+  .section-indicator {
+    width: 4px;
+    height: 20px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .ind-removed { background: var(--danger); }
+  .ind-added   { background: var(--accent3); }
+  .ind-changed { background: var(--warn); }
+  .ind-best    { background: var(--accent2); }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex: 1;
+  }
+
+  .section-count {
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+
+  .section-chevron {
+    color: var(--muted);
+    font-size: 11px;
+    transition: transform 0.2s;
+  }
+  .section-chevron.open { transform: rotate(180deg); }
+
+  .section-body {
+    display: none;
+    overflow-x: auto;
+  }
+  .section-body.open { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    background: var(--bg3);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg3); }
+
+  td {
+    padding: 7px 10px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  td.prefix  { color: var(--accent); font-weight: 500; }
+  td.device  { color: var(--muted); }
+  td.peer    { color: #cbd5e1; }
+
+  .badge-vrf {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .vrf-default { background: #1e3a5f; color: #7dd3fc; }
+  .vrf-PROD    { background: #2d1b4e; color: #c4b5fd; }
+  .vrf-MGMT    { background: #1a3a2a; color: #6ee7b7; }
+  .vrf-other   { background: #2a2a1a; color: #fde68a; }
+
+  tr.row-removed { background: var(--removed-bg); }
+  tr.row-removed:hover { background: rgba(239,68,68,0.14); }
+  tr.row-added   { background: var(--added-bg); }
+  tr.row-added:hover   { background: rgba(16,185,129,0.14); }
+  tr.row-changed { background: var(--changed-bg); }
+  tr.row-changed:hover { background: rgba(245,158,11,0.14); }
+
+  .val-old { color: var(--danger); text-decoration: line-through; opacity: 0.8; }
+  .val-new { color: var(--accent3); }
+  .val-arrow { color: var(--muted); margin: 0 4px; }
+
+  .community-tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    border: 1px solid #1e3a5f;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin: 1px;
+  }
+  .tag-removed { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: #7f1d1d; text-decoration: line-through; }
+  .tag-added   { background: rgba(16,185,129,0.15); color: #6ee7b7; border-color: #065f46; }
+  .tag-same    { background: var(--tag-bg); color: var(--tag-text); border-color: #1e3a5f; }
+
+  .no-change { color: var(--muted); font-size: 11px; font-style: italic; }
+
+  .error-msg {
+    padding: 24px 28px;
+    color: var(--danger);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>BGP Compare — Manual Paste</h1>
+  </div>
+  <div style="color:var(--muted);font-size:11px;text-align:right;">
+    Key: device + VRF + prefix + peer IP
+  </div>
+</header>
+
+<div class="howto">
+  <b>How to use:</b> on each device, run <code>show ip bgp detail vrf all</code> yourself and copy the terminal
+  output (if your platform doesn't support <code>vrf all</code>, <code>show ip bgp detail</code> works too — VRF
+  will just show as "default"). Paste the <b>before</b> capture into the left column and the <b>after</b> capture
+  (taken after your change) into the right column — one block per device. Give each block a device name so the
+  results are labeled. Click <b>Compare</b> to see exactly what changed. Nothing here is sent anywhere — parsing
+  and comparison happen entirely in this browser tab.
+</div>
+
+<div class="columns">
+  <div class="column">
+    <div class="column-title">
+      <span><span class="dot before-dot"></span>Before (pre-change)</span>
+      <button class="btn-add" type="button" onclick="addBlock('before')">+ Add device</button>
+    </div>
+    <div id="before-blocks"></div>
+  </div>
+
+  <div class="column">
+    <div class="column-title">
+      <span><span class="dot after-dot"></span>After (post-change)</span>
+      <button class="btn-add" type="button" onclick="addBlock('after')">+ Add device</button>
+    </div>
+    <div id="after-blocks"></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn-compare" id="btn-compare" disabled onclick="runCompare()">Compare</button>
+  <span class="hint" id="compare-hint">Paste at least one device under Before and After to enable Compare.</span>
+</div>
+
+<div class="summary" id="summary">
+  <div class="stat">
+    <div class="stat-val red"   id="s-removed">0</div>
+    <div class="stat-label">Routes Removed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val green" id="s-added">0</div>
+    <div class="stat-label">Routes Added</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-aspath">0</div>
+    <div class="stat-label">AS Path Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-nexthop">0</div>
+    <div class="stat-label">Next-Hop Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val amber" id="s-community">0</div>
+    <div class="stat-label">Community Changed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val purple" id="s-best">0</div>
+    <div class="stat-label">Best Path Changed</div>
+  </div>
+</div>
+
+<div class="no-diff" id="no-diff">✓ No differences found — snapshots are identical.</div>
+
+<div class="filterbar" id="filterbar">
+  <input type="text" class="f-input" id="f-search" placeholder="Search all columns (device, prefix, peer IP, AS path, communities…)">
+  <select class="f-select" id="f-device"><option value="">All devices</option></select>
+  <select class="f-select" id="f-vrf"><option value="">All VRFs</option></select>
+  <button class="btn-clear" id="f-clear" type="button">Clear filters</button>
+  <span class="f-hint" id="f-hint"></span>
+</div>
+
+<div class="sections" id="sections"></div>
+
+<script>
+// ── Parser (JS port of parsers/bgp_detail.py — see the Python tool for the source of truth) ──
+function extractField(pattern, text, defaultVal) {
+  if (defaultVal === undefined) defaultVal = "—";
+  const m = pattern.exec(text);
+  return m ? m[1].trim() : defaultVal;
+}
+function flagMatch(pattern, text) {
+  return pattern.test(text);
+}
+
+function splitVrfBlocks(rawText) {
+  const results = [];
+  const vrfHeaderRe = /^BGP routing table information for VRF (\S+)/gm;
+  const vrfMatches = Array.from(rawText.matchAll(vrfHeaderRe));
+
+  const splitPrefixBlocks = (text) => {
+    const parts = text.split(/(?=^BGP routing table entry for )/m);
+    return parts.map(b => b.trim()).filter(b => b.startsWith("BGP routing table entry for "));
+  };
+
+  if (vrfMatches.length === 0) {
+    splitPrefixBlocks(rawText).forEach(b => results.push(["default", b]));
+    return results;
+  }
+
+  for (let i = 0; i < vrfMatches.length; i++) {
+    const match = vrfMatches[i];
+    const vrfName = match[1];
+    const sectionStart = match.index + match[0].length;
+    const sectionEnd = (i + 1 < vrfMatches.length) ? vrfMatches[i + 1].index : rawText.length;
+    const sectionText = rawText.slice(sectionStart, sectionEnd);
+    splitPrefixBlocks(sectionText).forEach(b => results.push([vrfName, b]));
+  }
+  return results;
+}
+
+function splitPaths(block) {
+  const pathRe = /(?=^  (?:Local|\d[\d ]*)(?:\s*\(aggregated by[^)]*\))?\s*$)/m;
+  return block.split(pathRe).map(p => p.trim()).filter(p => p && !p.startsWith("BGP routing table"));
+}
+
+function parsePath(host, vrf, prefix, pathsAvailable, pathText) {
+  const lines = pathText.split(/\r\n|\r|\n/);
+
+  const asPathRaw = lines.length ? lines[0].trim() : "—";
+  let asPath = asPathRaw.replace(/\s*\(aggregated by[^)]*\)/, "").trim();
+  if (!asPath) asPath = "—";
+
+  const nexthopLine = lines.length > 1 ? lines[1].trim() : "";
+  const nextHop = extractField(/^(\S+)\s+from/, nexthopLine, "—");
+  const peerIp  = extractField(/from\s+(\S+)/, nexthopLine, "—");
+
+  const attrLine = lines.length > 2 ? lines.slice(2).join(" ") : "";
+
+  let origin = extractField(/Origin\s+(\S+)/, attrLine, "—");
+  origin = origin.replace(/,+$/, "");
+  const metric = extractField(/metric\s+(\S+),/, attrLine, "—");
+  const localPref = extractField(/localpref\s+(\S+),/, attrLine, "—");
+  const weight = extractField(/weight\s+(\d+)/, attrLine, "0");
+
+  const age = extractField(/Received\s+(\S+)\s+ago/, attrLine, "—");
+  const best = flagMatch(/\bbest\b/, attrLine);
+  const valid = flagMatch(/\bvalid\b/, attrLine);
+  const local = flagMatch(/\blocal\b/, attrLine);
+  const redistributed = flagMatch(/\bredistributed\b/, attrLine);
+
+  const communityMatches = Array.from(pathText.matchAll(/Community:\s+(.+)/g));
+  let communities = "";
+  if (communityMatches.length) {
+    const allComms = [];
+    const seen = new Set();
+    communityMatches.forEach(cm => {
+      cm[1].trim().split(/\s+/).forEach(c => {
+        if (!seen.has(c)) { seen.add(c); allComms.push(c); }
+      });
+    });
+    communities = allComms.join(" ");
+  }
+
+  return {
+    host: host, vrf: vrf, prefix: prefix,
+    paths_available: pathsAvailable,
+    as_path: asPath,
+    next_hop: nextHop,
+    peer_ip: peerIp,
+    origin: origin, local_pref: localPref, weight: weight, metric: metric, age: age,
+    best: best ? "✓" : "",
+    valid: valid ? "✓" : "",
+    local: local ? "✓" : "",
+    redistributed: redistributed ? "✓" : "",
+    communities: communities,
+  };
+}
+
+function parseBgpText(host, rawText) {
+  const records = [];
+  splitVrfBlocks(rawText).forEach(pair => {
+    const vrf = pair[0], prefixBlock = pair[1];
+    const prefix = extractField(/^BGP routing table entry for (\S+)/, prefixBlock, "—");
+    const pathsAvailable = extractField(/Paths:\s+(\d+)\s+available/, prefixBlock, "1");
+    splitPaths(prefixBlock).forEach(pathText => {
+      records.push(parsePath(host, vrf, prefix, pathsAvailable, pathText));
+    });
+  });
+  return records;
+}
+
+// ── Device-block management (paste inputs) ──────────────────────────────────
+let blockSeq = 0;
+const blockData = { before: {}, after: {} };
+
+function addBlock(side, presetName) {
+  const id = 'blk' + (++blockSeq);
+  blockData[side][id] = { name: presetName || '', records: null };
+
+  const wrap = document.createElement('div');
+  wrap.className = 'device-block';
+  wrap.id = id;
+  const n = Object.keys(blockData[side]).length;
+  wrap.innerHTML = `
+    <div class="device-block-row">
+      <input class="device-name" type="text" placeholder="Device name (e.g. router hostname)" value="${presetName || ''}">
+      <button class="btn-remove" type="button" title="Remove this device">✕</button>
+    </div>
+    <textarea class="device-paste" placeholder="Paste 'show ip bgp detail vrf all' output here…"></textarea>
+    <div class="paste-status" id="${id}-status"></div>
+  `;
+
+  const nameInput = wrap.querySelector('.device-name');
+  const textArea  = wrap.querySelector('.device-paste');
+  const removeBtn = wrap.querySelector('.btn-remove');
+
+  function sync() {
+    const name = nameInput.value.trim() || ('Device ' + n);
+    const text = textArea.value;
+    const statusEl = document.getElementById(id + '-status');
+    blockData[side][id].name = name;
+    if (!text.trim()) {
+      blockData[side][id].records = null;
+      statusEl.textContent = '';
+      statusEl.className = 'paste-status';
+    } else {
+      const recs = parseBgpText(name, text);
+      blockData[side][id].records = recs;
+      if (recs.length) {
+        statusEl.textContent = `✓ parsed ${recs.length} path${recs.length !== 1 ? 's' : ''}`;
+        statusEl.className = 'paste-status ok';
+      } else {
+        statusEl.textContent = '⚠ no BGP paths recognized in this text';
+        statusEl.className = 'paste-status err';
+      }
+    }
+    updateCompareState();
+  }
+
+  nameInput.addEventListener('input', sync);
+  textArea.addEventListener('input', sync);
+  removeBtn.addEventListener('click', () => {
+    delete blockData[side][id];
+    wrap.remove();
+    updateCompareState();
+  });
+
+  document.getElementById(side + '-blocks').appendChild(wrap);
+}
+
+function sideHasData(side) {
+  return Object.values(blockData[side]).some(b => b.records && b.records.length);
+}
+
+function updateCompareState() {
+  const ready = sideHasData('before') && sideHasData('after');
+  document.getElementById('btn-compare').disabled = !ready;
+  document.getElementById('compare-hint').textContent = ready
+    ? 'Ready — click Compare to diff these snapshots.'
+    : 'Paste at least one device under Before and After to enable Compare.';
+}
+
+function collectSide(side) {
+  let all = [];
+  Object.values(blockData[side]).forEach(b => { if (b.records) all = all.concat(b.records); });
+  return all;
+}
+
+// ── Diff logic (same shape/keying as bgp_compare.html) ───────────────────────
+function makeKey(r) { return [r.host, r.vrf, r.prefix, r.peer_ip].join('||'); }
+
+function buildMap(records) {
+  const m = new Map();
+  records.forEach(r => { if (!m.has(makeKey(r))) m.set(makeKey(r), r); });
+  return m;
+}
+
+function diffCommunities(oldStr, newStr) {
+  const oldSet = new Set((oldStr || '').trim().split(/\s+/).filter(Boolean));
+  const newSet = new Set((newStr || '').trim().split(/\s+/).filter(Boolean));
+  const all    = new Set([...oldSet, ...newSet]);
+  let html = '';
+  all.forEach(c => {
+    if (oldSet.has(c) && newSet.has(c)) html += `<span class="community-tag tag-same">${c}</span>`;
+    else if (oldSet.has(c))             html += `<span class="community-tag tag-removed">${c}</span>`;
+    else                                html += `<span class="community-tag tag-added">${c}</span>`;
+  });
+  return html || '<span style="color:var(--muted)">—</span>';
+}
+
+function vrfBadge(vrf) {
+  const cls = vrf === 'default' ? 'vrf-default' : vrf === 'PROD' ? 'vrf-PROD' : vrf === 'MGMT' ? 'vrf-MGMT' : 'vrf-other';
+  return `<span class="badge-vrf ${cls}">${vrf}</span>`;
+}
+
+function changed(a, b) { return (a || '').trim() !== (b || '').trim(); }
+
+function runCompare() {
+  const beforeData = collectSide('before');
+  const afterData  = collectSide('after');
+
+  const beforeMap = buildMap(beforeData);
+  const afterMap  = buildMap(afterData);
+
+  const removed   = [];
+  const added     = [];
+  const aspathChg = [];
+  const nexthopChg= [];
+  const commChg   = [];
+  const bestChg   = [];
+
+  beforeMap.forEach((r, key) => { if (!afterMap.has(key)) removed.push(r); });
+  afterMap.forEach((r, key) => { if (!beforeMap.has(key)) added.push(r); });
+
+  beforeMap.forEach((before, key) => {
+    if (!afterMap.has(key)) return;
+    const after = afterMap.get(key);
+
+    if (changed(before.as_path,     after.as_path))     aspathChg.push({before, after});
+    if (changed(before.next_hop,    after.next_hop))    nexthopChg.push({before, after});
+    if (changed(before.communities, after.communities)) commChg.push({before, after});
+    if (changed(before.best,        after.best))        bestChg.push({before, after});
+  });
+
+  document.getElementById('s-removed').textContent   = removed.length;
+  document.getElementById('s-added').textContent     = added.length;
+  document.getElementById('s-aspath').textContent    = aspathChg.length;
+  document.getElementById('s-nexthop').textContent   = nexthopChg.length;
+  document.getElementById('s-community').textContent = commChg.length;
+  document.getElementById('s-best').textContent      = bestChg.length;
+
+  document.getElementById('summary').classList.add('visible');
+
+  const total = removed.length + added.length + aspathChg.length + nexthopChg.length + commChg.length + bestChg.length;
+  document.getElementById('no-diff').classList.toggle('visible', total === 0);
+
+  const container = document.getElementById('sections');
+  container.innerHTML = '';
+
+  if (removed.length)    container.appendChild(buildRemovedSection(removed));
+  if (added.length)      container.appendChild(buildAddedSection(added));
+  if (aspathChg.length)  container.appendChild(buildChangedSection('AS Path Changed',    'ind-changed', aspathChg,  buildAspathRow));
+  if (nexthopChg.length) container.appendChild(buildChangedSection('Next-Hop Changed',   'ind-changed', nexthopChg, buildNexthopRow));
+  if (commChg.length)    container.appendChild(buildChangedSection('Community Changed',  'ind-changed', commChg,    buildCommRow));
+  if (bestChg.length)    container.appendChild(buildChangedSection('Best Path Changed',  'ind-best',    bestChg,    buildBestRow));
+
+  document.getElementById('f-search').value = '';
+  document.getElementById('f-device').value = '';
+  document.getElementById('f-vrf').value = '';
+  document.getElementById('filterbar').classList.toggle('visible', total > 0);
+  populateFilterOptions();
+  applyFilters();
+}
+
+// ── Filtering & sorting ────────────────────────────────────────────────────────
+function compareCells(aText, bText) {
+  const aNum = parseFloat(aText), bNum = parseFloat(bText);
+  const aIsNum = aText.trim() !== '' && /^-?\d+(\.\d+)?$/.test(aText.trim());
+  const bIsNum = bText.trim() !== '' && /^-?\d+(\.\d+)?$/.test(bText.trim());
+  if (aIsNum && bIsNum) return aNum - bNum;
+  return aText.toLowerCase().localeCompare(bText.toLowerCase());
+}
+
+function sortTableByColumn(table, colIdx, th) {
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const dir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+
+  table.querySelectorAll('thead th').forEach(h => { h.dataset.sortDir = ''; h.classList.remove('sort-asc', 'sort-desc'); });
+  th.dataset.sortDir = dir;
+  th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+  rows.sort((r1, r2) => {
+    const a = r1.children[colIdx] ? r1.children[colIdx].textContent.trim() : '';
+    const b = r2.children[colIdx] ? r2.children[colIdx].textContent.trim() : '';
+    const cmp = compareCells(a, b);
+    return dir === 'asc' ? cmp : -cmp;
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+function makeSortable(table) {
+  table.querySelectorAll('thead th').forEach((th, idx) => {
+    th.classList.add('sortable');
+    th.dataset.sortDir = '';
+    th.addEventListener('click', () => sortTableByColumn(table, idx, th));
+  });
+}
+
+function populateFilterOptions() {
+  const rows = document.querySelectorAll('#sections tbody tr');
+  const devices = new Set(), vrfs = new Set();
+  rows.forEach(r => {
+    if (r.dataset.device) devices.add(r.dataset.device);
+    if (r.dataset.vrf)    vrfs.add(r.dataset.vrf);
+  });
+  const devSel = document.getElementById('f-device');
+  const vrfSel = document.getElementById('f-vrf');
+  devSel.innerHTML = '<option value="">All devices</option>' + Array.from(devices).sort().map(d => `<option value="${d}">${d}</option>`).join('');
+  vrfSel.innerHTML = '<option value="">All VRFs</option>'    + Array.from(vrfs).sort().map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+function applyFilters() {
+  const search = document.getElementById('f-search').value.trim().toLowerCase();
+  const device = document.getElementById('f-device').value;
+  const vrf    = document.getElementById('f-vrf').value;
+
+  let totalRows = 0, totalVisible = 0;
+
+  document.querySelectorAll('#sections .section').forEach(sec => {
+    const table = sec.querySelector('table');
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    let visible = 0;
+    rows.forEach(row => {
+      const show = (!search || row.textContent.toLowerCase().includes(search))
+                && (!device || row.dataset.device === device)
+                && (!vrf || row.dataset.vrf === vrf);
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    totalRows += rows.length;
+    totalVisible += visible;
+
+    const countEl = sec.querySelector('.section-count');
+    if (countEl) {
+      countEl.textContent = (visible === rows.length)
+        ? `${rows.length} route${rows.length !== 1 ? 's' : ''}`
+        : `${visible} of ${rows.length} shown`;
+    }
+  });
+
+  const hint = document.getElementById('f-hint');
+  if (hint) {
+    hint.textContent = (search || device || vrf)
+      ? `${totalVisible} of ${totalRows} rows match`
+      : '';
+  }
+}
+
+document.getElementById('f-search').addEventListener('input', applyFilters);
+document.getElementById('f-device').addEventListener('change', applyFilters);
+document.getElementById('f-vrf').addEventListener('change', applyFilters);
+document.getElementById('f-clear').addEventListener('click', () => {
+  document.getElementById('f-search').value = '';
+  document.getElementById('f-device').value = '';
+  document.getElementById('f-vrf').value = '';
+  applyFilters();
+});
+
+// ── Section builders ──────────────────────────────────────────────────────────
+function makeSection(title, indClass, count, bodyHTML, startOpen) {
+  const sec = document.createElement('div');
+  sec.className = 'section';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'section-header';
+  hdr.innerHTML = `
+    <div class="section-indicator ${indClass}"></div>
+    <div class="section-title">${title}</div>
+    <div class="section-count">${count} route${count !== 1 ? 's' : ''}</div>
+    <div class="section-chevron ${startOpen ? 'open' : ''}">▼</div>
+  `;
+
+  const body = document.createElement('div');
+  body.className = 'section-body' + (startOpen ? ' open' : '');
+  body.innerHTML = bodyHTML;
+
+  const sectionTable = body.querySelector('table');
+  if (sectionTable) makeSortable(sectionTable);
+
+  hdr.addEventListener('click', () => {
+    body.classList.toggle('open');
+    hdr.querySelector('.section-chevron').classList.toggle('open');
+  });
+
+  sec.appendChild(hdr);
+  sec.appendChild(body);
+  return sec;
+}
+
+function simpleTable(headers, rows) {
+  const ths = headers.map(h => `<th>${h}</th>`).join('');
+  return `<table><thead><tr>${ths}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+function buildRemovedSection(records) {
+  const rows = records.map(r => `
+    <tr class="row-removed" data-device="${r.host}" data-vrf="${r.vrf}">
+      <td class="device">${r.host}</td>
+      <td>${vrfBadge(r.vrf)}</td>
+      <td class="prefix">${r.prefix}</td>
+      <td class="peer">${r.peer_ip}</td>
+      <td>${r.as_path}</td>
+      <td>${r.next_hop}</td>
+      <td>${r.communities ? r.communities.split(' ').map(c=>`<span class="community-tag">${c}</span>`).join('') : '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`);
+  const html = simpleTable(['Device','VRF','Prefix','Peer IP','AS Path','Next Hop','Communities'], rows);
+  return makeSection('Routes Removed', 'ind-removed', records.length, html, true);
+}
+
+function buildAddedSection(records) {
+  const rows = records.map(r => `
+    <tr class="row-added" data-device="${r.host}" data-vrf="${r.vrf}">
+      <td class="device">${r.host}</td>
+      <td>${vrfBadge(r.vrf)}</td>
+      <td class="prefix">${r.prefix}</td>
+      <td class="peer">${r.peer_ip}</td>
+      <td>${r.as_path}</td>
+      <td>${r.next_hop}</td>
+      <td>${r.communities ? r.communities.split(' ').map(c=>`<span class="community-tag tag-added">${c}</span>`).join('') : '<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`);
+  const html = simpleTable(['Device','VRF','Prefix','Peer IP','AS Path','Next Hop','Communities'], rows);
+  return makeSection('Routes Added', 'ind-added', records.length, html, true);
+}
+
+function buildAspathRow(pair) {
+  return `<tr class="row-changed" data-device="${pair.before.host}" data-vrf="${pair.before.vrf}">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>
+      <span class="val-old">${pair.before.as_path}</span>
+      <span class="val-arrow">→</span>
+      <span class="val-new">${pair.after.as_path}</span>
+    </td>
+  </tr>`;
+}
+
+function buildNexthopRow(pair) {
+  return `<tr class="row-changed" data-device="${pair.before.host}" data-vrf="${pair.before.vrf}">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>
+      <span class="val-old">${pair.before.next_hop}</span>
+      <span class="val-arrow">→</span>
+      <span class="val-new">${pair.after.next_hop}</span>
+    </td>
+  </tr>`;
+}
+
+function buildCommRow(pair) {
+  return `<tr class="row-changed" data-device="${pair.before.host}" data-vrf="${pair.before.vrf}">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>${diffCommunities(pair.before.communities, pair.after.communities)}</td>
+  </tr>`;
+}
+
+function buildBestRow(pair) {
+  const wasB = pair.before.best === '✓';
+  const isB  = pair.after.best  === '✓';
+  const desc = wasB && !isB ? '<span class="val-old">was best</span> <span class="val-arrow">→</span> <span style="color:var(--muted)">no longer best</span>'
+                            : '<span style="color:var(--muted)">not best</span> <span class="val-arrow">→</span> <span class="val-new">now best</span>';
+  return `<tr class="row-changed" data-device="${pair.before.host}" data-vrf="${pair.before.vrf}">
+    <td class="device">${pair.before.host}</td>
+    <td>${vrfBadge(pair.before.vrf)}</td>
+    <td class="prefix">${pair.before.prefix}</td>
+    <td class="peer">${pair.before.peer_ip}</td>
+    <td>${desc}</td>
+  </tr>`;
+}
+
+function buildChangedSection(title, indClass, pairs, rowFn) {
+  const headers = title === 'Community Changed'
+    ? ['Device','VRF','Prefix','Peer IP','Communities']
+    : title === 'AS Path Changed'
+    ? ['Device','VRF','Prefix','Peer IP','AS Path']
+    : title === 'Next-Hop Changed'
+    ? ['Device','VRF','Prefix','Peer IP','Next Hop']
+    : ['Device','VRF','Prefix','Peer IP','Change'];
+  const rows = pairs.map(rowFn);
+  const html = simpleTable(headers, rows);
+  return makeSection(title, indClass, pairs.length, html, true);
+}
+
+// ── Init: start each column with one empty block ─────────────────────────────
+addBlock('before');
+addBlock('after');
+</script>
+</body>
+</html>
