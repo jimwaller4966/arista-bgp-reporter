@@ -155,6 +155,14 @@ def save_output(host, cmd, output, timestamp):
 
 
 def main():
+    try:
+        _main()
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled. No further devices were contacted.")
+        sys.exit(130)
+
+
+def _main():
     parser = argparse.ArgumentParser(description="Collect CLI output from Arista devices")
     parser.add_argument("command", nargs="?", help="Single command to run")
     parser.add_argument("-c", "--commands-file", help="File with one command per line")
