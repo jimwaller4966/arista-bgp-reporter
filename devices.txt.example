@@ -1,7 +1,5 @@
-# BGP fullmesh lab — containerlab mgmt IPs
-172.20.20.11
-172.20.20.12
-172.20.20.13
-172.20.20.14
-172.20.20.15
-172.20.20.16
+# bgp-reporter-test lab on clab-dc1 (containerlab mgmt IPs)
+# r1 and r2: admin / admin.  r3 uses a different password on purpose.
+172.20.20.211
+172.20.20.212
+172.20.20.213

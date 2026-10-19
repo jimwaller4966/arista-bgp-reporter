@@ -52,8 +52,8 @@ def load_devices(path="devices.txt"):
     devices = []
     with open(path) as f:
         for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
+            line = line.split("#", 1)[0].strip()  # '#' starts a comment, also after an address
+            if line:
                 devices.append(line)
     if not devices:
         print("ERROR: No devices found in devices.txt")
